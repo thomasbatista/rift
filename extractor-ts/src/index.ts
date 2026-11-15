@@ -20,6 +20,12 @@ interface ConsumptionGraph {
   calls: ConsumedCall[];
 }
 
+interface ResolvedUrl {
+  url: string | null;
+  kind: UrlKind;
+  confidence: number;
+}
+
 // Glob patterns need forward slashes, even on Windows.
 const toPosix = (path: string): string => path.split(sep).join("/");
 
@@ -27,11 +33,38 @@ function isFetchCall(call: CallExpression): boolean {
   return call.getExpression().getText() === "fetch";
 }
 
-function resolveUrl(arg: Node | undefined): { url: string | null; kind: UrlKind } {
-  if (arg && (Node.isStringLiteral(arg) || Node.isNoSubstitutionTemplateLiteral(arg))) {
-    return { url: arg.getLiteralText(), kind: "literal" };
+function isPlainName(expression: Node): boolean {
+  return Node.isIdentifier(expression) || Node.isPropertyAccessExpression(expression);
+}
+
+// The name only helps humans read the report: paths are matched by position, not by name.
+function placeholderName(expression: Node): string {
+  if (Node.isIdentifier(expression)) return expression.getText();
+  if (Node.isPropertyAccessExpression(expression)) return expression.getName();
+  return "param";
+}
+
+function resolveUrl(arg: Node | undefined): ResolvedUrl {
+  if (!arg) {
+    return { url: null, kind: "dynamic", confidence: 0.0 };
   }
-  return { url: null, kind: "dynamic" };
+
+  if (Node.isStringLiteral(arg) || Node.isNoSubstitutionTemplateLiteral(arg)) {
+    return { url: arg.getLiteralText(), kind: "literal", confidence: 1.0 };
+  }
+
+  if (Node.isTemplateExpression(arg)) {
+    let url = arg.getHead().getLiteralText();
+    let allPlain = true;
+    for (const span of arg.getTemplateSpans()) {
+      const expression = span.getExpression();
+      if (!isPlainName(expression)) allPlain = false;
+      url += `{${placeholderName(expression)}}` + span.getLiteral().getLiteralText();
+    }
+    return { url, kind: "template", confidence: allPlain ? 0.8 : 0.5 };
+  }
+
+  return { url: null, kind: "dynamic", confidence: 0.0 };
 }
 
 function methodOf(call: CallExpression): string {
@@ -64,14 +97,14 @@ function extract(directory: string): ConsumptionGraph {
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       if (!isFetchCall(call)) continue;
 
-      const { url, kind } = resolveUrl(call.getArguments()[0]);
+      const { url, kind, confidence } = resolveUrl(call.getArguments()[0]);
       calls.push({
         method: methodOf(call),
         url,
         urlKind: kind,
         file: toPosix(relative(root, sourceFile.getFilePath())),
         line: call.getStartLineNumber(),
-        confidence: kind === "literal" ? 1.0 : 0.0,
+        confidence,
         fieldsRead: [],
       });
     }
