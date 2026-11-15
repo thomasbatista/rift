@@ -1,0 +1,19 @@
+# Node
+node_modules/
+dist/
+npm-debug.log*
+
+# Java / Maven
+target/
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
