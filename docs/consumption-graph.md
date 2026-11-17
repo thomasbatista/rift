@@ -50,3 +50,16 @@ Any language can be supported by writing an extractor that emits this format.
 - `template`: the URL was a template string or concatenation that was resolved. `confidence` is below `1.0`.
 - `dynamic`: the URL could not be resolved. `url` is `null` and `confidence` is `0.0`. The core must **not** report findings about these calls.
 - Precision over coverage: when in doubt, lower the confidence instead of guessing.
+
+
+## Confidence rules (TypeScript extractor)
+
+| Situation | `urlKind` | `confidence` |
+|---|---|---|
+| The URL is a plain string | `literal` | 1.0 |
+| Resolved through concatenation or a local `const`, with no unknown parts | `template` | 0.9 |
+| Resolved, and every unknown part is a plain name (`id`, `member.userId`) | `template` | 0.8 |
+| Resolved, but some unknown part is an expression (e.g. a function call) | `template` | 0.5 |
+| No fixed text at all (e.g. the URL is a function parameter) | `dynamic` | 0.0 |
+
+Unknown parts are written as `{name}` in `url`. Backends and frontends often name the same parameter differently (`{boardID}` vs `${boardId}`), so the core matches path parameters by position, never by name.
