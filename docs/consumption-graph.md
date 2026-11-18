@@ -74,3 +74,6 @@ Unknown parts are written as `{name}` in `url`. Backends and frontends often nam
 - An optional query string such as `(cond ? "?a=1" : "")` does not change the path.
 - Calls to class methods and plain functions that have a single `return` (e.g. `this.teamPath()`). With two or more returns the call is reported as `dynamic`.
 - The server address is not part of the API path. Tell the extractor which expressions hold it with `--base-url "this.getBaseURL()"` (the option can be repeated).
+- `encodeURIComponent(x)`, `encodeURI(x)` and `String(x)` only convert a value, so they resolve to the value itself.
+- `value || "0"` and `value ?? "0"` count as a single path segment.
+- A `let` that only ever holds a query string may be reassigned freely. A `let` that starts as a path may not.
