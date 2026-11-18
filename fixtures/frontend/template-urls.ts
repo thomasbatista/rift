@@ -8,12 +8,14 @@ export function updateMember(projectId: string, member: { userId: string }) {
   return fetch(`/api/projects/${projectId}/members/${member.userId}`, { method: "PUT" });
 }
 
-// Expected: GET /api/search/{param}, template, confidence 0.5 (the substitution is a call, not a plain name)
+// Expected: GET /api/search/{param}, template, confidence 0.5 (the substitution is a call to an unknown function)
 export function search(term: string) {
-  return fetch(`/api/search/${encodeURIComponent(term)}`);
+  return fetch(`/api/search/${slugify(term)}`);
 }
 
 // Expected: GET /api/health, literal, confidence 1 (template without substitutions)
 export function health() {
   return fetch(`/api/health`);
 }
+
+declare function slugify(value: string): string;

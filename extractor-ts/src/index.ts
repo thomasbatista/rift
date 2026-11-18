@@ -46,10 +46,8 @@ type Part =
   | { kind: "param"; name: string; plain: boolean };
 
 const MAX_DEPTH = 8;
+const TRANSPARENT_CALLS = new Set(["encodeURIComponent", "encodeURI", "String"]);
 const DYNAMIC: ResolvedUrl = { url: null, kind: "dynamic", confidence: 0.0 };
-
-// Expressions (as written in the source) that hold the server address, e.g. "this.getBaseURL()".
-// They are not part of the API path, so they resolve to empty text.
 const settings = { baseUrlExpressions: new Set<string>() };
 
 // The name only helps humans read the report: paths are matched by position, not by name.
@@ -83,8 +81,12 @@ function stripQuery(parts: Part[]): Part[] {
   return kept;
 }
 
-// A `let` is only safe to follow when every later change is a query string append.
+// A `let` is only safe to follow when it never changes the path: later `+=` must append
+// query strings, and `=` is allowed only for variables that hold nothing but a query string.
 function changesThePath(declaration: VariableDeclaration, depth: number): boolean {
+  const initializer = declaration.getInitializer();
+  const startsAsQuery = initializer ? isQueryOrEmpty(toParts(initializer, depth + 1)) : false;
+
   for (const reference of declaration.findReferencesAsNodes()) {
     const assignment = reference.getParent();
     if (!assignment || !Node.isBinaryExpression(assignment) || assignment.getLeft() !== reference) continue;
@@ -92,6 +94,8 @@ function changesThePath(declaration: VariableDeclaration, depth: number): boolea
     const operator = assignment.getOperatorToken().getKind();
     if (operator === SyntaxKind.PlusEqualsToken) {
       if (!isQueryOrEmpty(toParts(assignment.getRight(), depth + 1))) return true;
+    } else if (operator === SyntaxKind.EqualsToken) {
+      if (!startsAsQuery || !isQueryOrEmpty(toParts(assignment.getRight(), depth + 1))) return true;
     } else if (operator >= SyntaxKind.FirstAssignment && operator <= SyntaxKind.LastAssignment) {
       return true;
     }
@@ -134,6 +138,21 @@ function toParts(node: Node, depth: number): Part[] {
     if (isQueryOrEmpty(whenTrue) && isQueryOrEmpty(whenFalse)) {
       return [{ kind: "text", value: "?" }];
     }
+  }
+
+  // value || "0" and value ?? "0" are still a single path segment.
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    const isFallback = operator === SyntaxKind.BarBarToken || operator === SyntaxKind.QuestionQuestionToken;
+    const left = node.getLeft();
+    if (isFallback && Node.isStringLiteral(node.getRight()) && (Node.isIdentifier(left) || Node.isPropertyAccessExpression(left))) {
+      return [paramFor(left)];
+    }
+  }
+
+  if (Node.isCallExpression(node) && TRANSPARENT_CALLS.has(node.getExpression().getText())) {
+    const [argument] = node.getArguments();
+    if (argument) return toParts(argument, depth + 1);
   }
 
   // this.teamPath() or buildPath(): follow the function when it has a single return.
