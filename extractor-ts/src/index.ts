@@ -48,6 +48,10 @@ type Part =
 const MAX_DEPTH = 8;
 const DYNAMIC: ResolvedUrl = { url: null, kind: "dynamic", confidence: 0.0 };
 
+// Expressions (as written in the source) that hold the server address, e.g. "this.getBaseURL()".
+// They are not part of the API path, so they resolve to empty text.
+const settings = { baseUrlExpressions: new Set<string>() };
+
 // The name only helps humans read the report: paths are matched by position, not by name.
 function paramFor(expression: Node): Part {
   if (Node.isIdentifier(expression)) {
@@ -98,6 +102,10 @@ function changesThePath(declaration: VariableDeclaration, depth: number): boolea
 function toParts(node: Node, depth: number): Part[] {
   if (depth > MAX_DEPTH) return [paramFor(node)];
 
+  if (settings.baseUrlExpressions.has(node.getText())) {
+    return [{ kind: "text", value: "" }];
+  }
+
   if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) {
     return [{ kind: "text", value: node.getLiteralText() }];
   }
@@ -125,6 +133,16 @@ function toParts(node: Node, depth: number): Part[] {
     const whenFalse = toParts(node.getWhenFalse(), depth + 1);
     if (isQueryOrEmpty(whenTrue) && isQueryOrEmpty(whenFalse)) {
       return [{ kind: "text", value: "?" }];
+    }
+  }
+
+  // this.teamPath() or buildPath(): follow the function when it has a single return.
+  if (Node.isCallExpression(node)) {
+    const callee = node.getExpression().getSymbol()?.getValueDeclaration();
+    if (callee && (Node.isMethodDeclaration(callee) || Node.isFunctionDeclaration(callee))) {
+      const returns = callee.getBody()?.getDescendantsOfKind(SyntaxKind.ReturnStatement) ?? [];
+      const returned = returns.length === 1 ? returns[0].getExpression() : undefined;
+      if (returned) return toParts(returned, depth + 1);
     }
   }
 
@@ -211,12 +229,38 @@ function extract(directory: string): ConsumptionGraph {
   return { version: 1, extractor: "ts", calls };
 }
 
+interface Args {
+  directory?: string;
+  outputFile?: string;
+  baseUrls: string[];
+}
+
+function parseArgs(argv: string[]): Args {
+  const positional: string[] = [];
+  const baseUrls: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--base-url") {
+      const value = argv[++i];
+      if (!value) {
+        console.error("--base-url needs a value");
+        process.exit(2);
+      }
+      baseUrls.push(value);
+    } else {
+      positional.push(argv[i]);
+    }
+  }
+  return { directory: positional[0], outputFile: positional[1], baseUrls };
+}
+
 function main(): void {
-  const [directory, outputFile] = process.argv.slice(2);
+  const { directory, outputFile, baseUrls } = parseArgs(process.argv.slice(2));
   if (!directory) {
-    console.error("usage: rift-extractor-ts <frontend-directory> [output.json]");
+    console.error('usage: rift-extractor-ts <frontend-directory> [output.json] [--base-url "<expression>"]...');
     process.exit(2);
   }
+
+  baseUrls.forEach((expression) => settings.baseUrlExpressions.add(expression));
 
   const json = JSON.stringify(extract(directory), null, 2);
   if (outputFile) {
