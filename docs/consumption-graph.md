@@ -63,3 +63,12 @@ Any language can be supported by writing an extractor that emits this format.
 | No fixed text at all (e.g. the URL is a function parameter) | `dynamic` | 0.0 |
 
 Unknown parts are written as `{name}` in `url`. Backends and frontends often name the same parameter differently (`{boardID}` vs `${boardId}`), so the core matches path parameters by position, never by name.
+
+
+## What the TypeScript extractor resolves
+
+- String literals, template literals and `+` concatenation.
+- Local `const` variables holding a URL.
+- Local `let` variables, but only when every later change is a query string append (`path += "?x=1"`). A `let` that is reassigned, or that receives path text, has several possible values, so the call is reported as `dynamic`.
+- Query strings are removed: backend specs describe paths only.
+- An optional query string such as `(cond ? "?a=1" : "")` does not change the path.
