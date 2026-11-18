@@ -36,6 +36,13 @@
             <version>5.11.4</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- Reads consumption-graph.json. Same version swagger-parser already brings. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.16.2</version>
+        </dependency>
     </dependencies>
 
     <build>

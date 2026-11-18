@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "extractor": "ts",
+  "calls": [
+    {
+      "method": "GET",
+      "url": "/api/projects/{id}",
+      "urlKind": "template",
+      "file": "src/api/projects.ts",
+      "line": 12,
+      "confidence": 0.8,
+      "fieldsRead": ["name", "owner"]
+    },
+    {
+      "method": "POST",
+      "url": "/api/projects",
+      "urlKind": "literal",
+      "file": "src/api/projects.ts",
+      "line": 20,
+      "confidence": 1,
+      "fieldsRead": []
+    },
+    {
+      "method": "GET",
+      "url": null,
+      "urlKind": "dynamic",
+      "file": "src/api/dynamic.ts",
+      "line": 5,
+      "confidence": 0,
+      "fieldsRead": []
+    }
+  ]
+}
