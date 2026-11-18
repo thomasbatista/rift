@@ -72,3 +72,5 @@ Unknown parts are written as `{name}` in `url`. Backends and frontends often nam
 - Local `let` variables, but only when every later change is a query string append (`path += "?x=1"`). A `let` that is reassigned, or that receives path text, has several possible values, so the call is reported as `dynamic`.
 - Query strings are removed: backend specs describe paths only.
 - An optional query string such as `(cond ? "?a=1" : "")` does not change the path.
+- Calls to class methods and plain functions that have a single `return` (e.g. `this.teamPath()`). With two or more returns the call is reported as `dynamic`.
+- The server address is not part of the API path. Tell the extractor which expressions hold it with `--base-url "this.getBaseURL()"` (the option can be repeated).
