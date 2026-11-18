@@ -1,4 +1,11 @@
-import { CallExpression, Node, Project, SyntaxKind, VariableDeclarationKind } from "ts-morph";
+import {
+  CallExpression,
+  Node,
+  Project,
+  SyntaxKind,
+  VariableDeclaration,
+  VariableDeclarationKind,
+} from "ts-morph";
 import { writeFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 
@@ -52,9 +59,40 @@ function paramFor(expression: Node): Part {
   return { kind: "param", name: "param", plain: false };
 }
 
-function isConst(declaration: Node): boolean {
-  if (!Node.isVariableDeclaration(declaration)) return false;
-  return declaration.getVariableStatement()?.getDeclarationKind() === VariableDeclarationKind.Const;
+// "?page=2", "&x=1" or nothing: the part of a URL that is not the path.
+function isQueryOrEmpty(parts: Part[]): boolean {
+  const first = parts.find((part) => !(part.kind === "text" && part.value === ""));
+  if (!first) return true;
+  return first.kind === "text" && (first.value.startsWith("?") || first.value.startsWith("&"));
+}
+
+// Backend specs describe paths, not query strings, so everything after "?" is dropped.
+function stripQuery(parts: Part[]): Part[] {
+  const kept: Part[] = [];
+  for (const part of parts) {
+    if (part.kind === "text" && part.value.includes("?")) {
+      kept.push({ kind: "text", value: part.value.split("?")[0] });
+      break;
+    }
+    kept.push(part);
+  }
+  return kept;
+}
+
+// A `let` is only safe to follow when every later change is a query string append.
+function changesThePath(declaration: VariableDeclaration, depth: number): boolean {
+  for (const reference of declaration.findReferencesAsNodes()) {
+    const assignment = reference.getParent();
+    if (!assignment || !Node.isBinaryExpression(assignment) || assignment.getLeft() !== reference) continue;
+
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator === SyntaxKind.PlusEqualsToken) {
+      if (!isQueryOrEmpty(toParts(assignment.getRight(), depth + 1))) return true;
+    } else if (operator >= SyntaxKind.FirstAssignment && operator <= SyntaxKind.LastAssignment) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function toParts(node: Node, depth: number): Part[] {
@@ -81,12 +119,27 @@ function toParts(node: Node, depth: number): Part[] {
     return [...toParts(node.getLeft(), depth + 1), ...toParts(node.getRight(), depth + 1)];
   }
 
+  // cond ? "?a=1" : "" is an optional query string. Mark where the query starts.
+  if (Node.isConditionalExpression(node)) {
+    const whenTrue = toParts(node.getWhenTrue(), depth + 1);
+    const whenFalse = toParts(node.getWhenFalse(), depth + 1);
+    if (isQueryOrEmpty(whenTrue) && isQueryOrEmpty(whenFalse)) {
+      return [{ kind: "text", value: "?" }];
+    }
+  }
+
   if (Node.isIdentifier(node)) {
-    // A local const holding a URL: follow it to its initializer.
+    // A local variable holding a URL: follow it to its initializer.
     const declaration = node.getSymbol()?.getValueDeclaration();
-    if (declaration && isConst(declaration) && Node.isVariableDeclaration(declaration)) {
+    if (declaration && Node.isVariableDeclaration(declaration)) {
       const initializer = declaration.getInitializer();
-      if (initializer) return toParts(initializer, depth + 1);
+      const kind = declaration.getVariableStatement()?.getDeclarationKind();
+      if (initializer && kind === VariableDeclarationKind.Const) {
+        return toParts(initializer, depth + 1);
+      }
+      if (initializer && kind === VariableDeclarationKind.Let && !changesThePath(declaration, depth)) {
+        return toParts(initializer, depth + 1);
+      }
     }
   }
 
@@ -100,7 +153,7 @@ function resolveUrl(arg: Node | undefined): ResolvedUrl {
     return { url: arg.getLiteralText(), kind: "literal", confidence: 1.0 };
   }
 
-  const parts = toParts(arg, 0);
+  const parts = stripQuery(toParts(arg, 0));
 
   // Without any fixed text there is nothing to match against the backend.
   const hasText = parts.some((part) => part.kind === "text" && part.value.length > 0);
