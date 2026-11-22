@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "extractor": "ts",
+  "calls": [
+    { "method": "GET", "url": "/api/v2/boards", "urlKind": "literal", "file": "src/api.ts", "line": 5, "confidence": 1, "fieldsRead": [] },
+    { "method": "DELETE", "url": "/api/v2/boards/{id}", "urlKind": "template", "file": "src/api.ts", "line": 9, "confidence": 0.8, "fieldsRead": [] },
+    { "method": "GET", "url": "/api/v2/reports", "urlKind": "literal", "file": "src/api.ts", "line": 14, "confidence": 1, "fieldsRead": [] },
+    { "method": "POST", "url": "/api/v2/boards/{id}/archive", "urlKind": "template", "file": "src/api.ts", "line": 21, "confidence": 0.5, "fieldsRead": [] },
+    { "method": "GET", "url": null, "urlKind": "dynamic", "file": "src/api.ts", "line": 30, "confidence": 0, "fieldsRead": [] },
+    { "method": "GET", "url": "/api/v2/boards", "urlKind": "literal", "file": "src/api.ts", "line": 40, "confidence": 1, "fieldsRead": [] }
+  ]
+}

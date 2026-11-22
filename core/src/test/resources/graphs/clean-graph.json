@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "extractor": "ts",
+  "calls": [
+    { "method": "GET", "url": "/api/v2/boards", "urlKind": "literal", "file": "src/api.ts", "line": 1, "confidence": 1, "fieldsRead": [] },
+    { "method": "POST", "url": "/api/v2/boards", "urlKind": "literal", "file": "src/api.ts", "line": 2, "confidence": 1, "fieldsRead": [] },
+    { "method": "DELETE", "url": "/api/v2/boards/{id}", "urlKind": "template", "file": "src/api.ts", "line": 3, "confidence": 0.8, "fieldsRead": [] },
+    { "method": "GET", "url": "/api/v2/teams/{teamId}/notifyadminupgrade", "urlKind": "template", "file": "src/api.ts", "line": 4, "confidence": 0.8, "fieldsRead": [] }
+  ]
+}
