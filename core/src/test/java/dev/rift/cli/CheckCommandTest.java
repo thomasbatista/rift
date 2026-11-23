@@ -90,6 +90,40 @@ class CheckCommandTest {
         assertTrue(result.err().contains("--min-confidence"));
     }
 
+    @Test
+    void githubFormatWritesWorkflowCommands() throws Exception {
+        Result result = run(check("drift-graph.json", "--format", "github"));
+
+        assertEquals(1, result.exitCode(), result.err());
+        assertTrue(result.out().startsWith(
+                "::error file=src/api.ts,line=14,title=rift MISSING_ENDPOINT::"
+                        + "The backend does not declare GET /api/v2/reports"));
+        assertTrue(result.out().contains("::group::Endpoints no scanned frontend code calls (2)"));
+    }
+
+    @Test
+    void whenTheBuildDoesNotFailAnnotationsAreWarnings() throws Exception {
+        Result result = run(check("drift-graph.json", "--format", "github", "--fail-on", "never"));
+
+        assertEquals(0, result.exitCode(), result.err());
+        assertTrue(result.out().startsWith("::warning file=src/api.ts,line=14,"));
+    }
+
+    @Test
+    void theFilePrefixGoesInFrontOfEveryFilePath() throws Exception {
+        Result result = run(check("drift-graph.json", "--file-prefix", ".\\web\\src\\"));
+
+        assertTrue(result.out().contains("web/src/src/api.ts:14"));
+    }
+
+    @Test
+    void aFilePrefixIsNormalized() {
+        assertEquals("web/src", CheckCommand.normalizePrefix("web\\src\\"));
+        assertEquals("examples/drift-demo/frontend", CheckCommand.normalizePrefix("./examples/drift-demo/frontend/"));
+        assertEquals("", CheckCommand.normalizePrefix(null));
+        assertEquals("", CheckCommand.normalizePrefix(""));
+    }
+
     private static String[] check(String graph, String... extra) throws Exception {
         List<String> args = new ArrayList<>(List.of(
                 "check",

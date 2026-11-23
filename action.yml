@@ -23,6 +23,10 @@ inputs:
     description: "What makes the step fail: missing, all or never."
     required: false
     default: missing
+  format:
+    description: "Report format: github (annotations on the files), text or json."
+    required: false
+    default: github
 
 runs:
   using: composite
@@ -53,6 +57,7 @@ runs:
         BASE_URLS: ${{ inputs.base-url }}
         MIN_CONFIDENCE: ${{ inputs.min-confidence }}
         FAIL_ON: ${{ inputs.fail-on }}
+        FORMAT: ${{ inputs.format }}
       run: |
         args=()
         while IFS= read -r expression; do
@@ -66,4 +71,5 @@ runs:
           --spec "$SPEC" \
           --min-confidence "$MIN_CONFIDENCE" \
           --fail-on "$FAIL_ON" \
+          --format "$FORMAT" \
           "${args[@]}"

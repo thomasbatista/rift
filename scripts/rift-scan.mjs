@@ -8,7 +8,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MIN_JAVA = 21;
@@ -17,6 +17,13 @@ const USAGE_ERROR = 2;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const extractor = join(root, "extractor-ts", "dist", "index.js");
 const jar = join(root, "core", "target", "rift.jar");
+
+// Findings name files relative to the frontend directory. Prefixing them with where that directory
+// lives (relative to the current one) lets editors and GitHub annotations find the files.
+function filePrefix(directory) {
+  const path = relative(process.cwd(), resolve(directory)).split(sep).join("/");
+  return path.startsWith("..") || isAbsolute(path) ? "" : path;
+}
 
 function fail(message) {
   console.error(`rift-scan: ${message}`);
@@ -64,7 +71,11 @@ try {
   );
   if (extracted.status !== 0) fail("the TypeScript extractor failed (see the message above)");
 
-  const checked = spawnSync(java, ["-jar", jar, "check", "--consumption", graphFile, ...forwarded], { stdio: "inherit" });
+  const prefix = filePrefix(frontend);
+  const prefixArgs = forwarded.includes("--file-prefix") || !prefix ? [] : ["--file-prefix", prefix];
+
+  const checked = spawnSync(java, ["-jar", jar, "check", "--consumption", graphFile, ...prefixArgs, ...forwarded], { stdio: "inherit" });
+  
   exitCode = checked.status ?? USAGE_ERROR;
 } finally {
   if (workDir) rmSync(workDir, { recursive: true, force: true });

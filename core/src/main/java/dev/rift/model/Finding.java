@@ -25,4 +25,12 @@ public record Finding(Rule rule, String method, String path, String file, int li
     public boolean hasLocation() {
         return file != null;
     }
+
+    /** Same finding with {@code prefix/} in front of the file path. Findings without a file are unchanged. */
+    public Finding withFilePrefix(String prefix) {
+        if (file == null || prefix == null || prefix.isEmpty()) {
+            return this;
+        }
+        return new Finding(rule, method, path, prefix + "/" + file, line, confidence, message);
+    }
 }

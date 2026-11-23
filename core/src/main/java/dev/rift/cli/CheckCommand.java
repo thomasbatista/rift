@@ -7,6 +7,7 @@ import dev.rift.model.ConsumptionGraph;
 import dev.rift.model.Endpoint;
 import dev.rift.model.Finding;
 import dev.rift.report.Coverage;
+import dev.rift.report.GithubReporter;
 import dev.rift.report.JsonReporter;
 import dev.rift.report.Report;
 import dev.rift.report.TextReporter;
@@ -53,6 +54,11 @@ public class CheckCommand implements Callable<Integer> {
             description = "What makes the exit code 1: ${COMPLETION-CANDIDATES}. Default: ${DEFAULT-VALUE}.")
     FailOn failOn;
 
+    @Option(names = "--file-prefix", paramLabel = "<dir>",
+            description = "Directory of the scanned frontend, relative to where you run rift (or the repository "
+                    + "root on GitHub). It goes in front of file paths so editors and annotations find the files.")
+    String filePrefix;
+
     @Option(names = "--no-color", description = "Never use colors (NO_COLOR is also respected).")
     boolean noColor;
 
@@ -66,18 +72,39 @@ public class CheckCommand implements Callable<Integer> {
         ConsumptionGraph graph = ConsumptionGraphLoader.load(consumption);
 
         List<Finding> all = DiffEngine.analyze(endpoints, graph);
-        List<Finding> shown = all.stream().filter(finding -> finding.confidence() >= minConfidence).toList();
+        String prefix = normalizePrefix(filePrefix);
+        List<Finding> shown = all.stream()
+                .filter(finding -> finding.confidence() >= minConfidence)
+                .map(finding -> finding.withFilePrefix(prefix))
+                .toList();
         Report report = new Report(specLocation, Coverage.of(graph), minConfidence, all.size() - shown.size(), shown);
 
-        String output = format == Format.JSON
-                ? new JsonReporter().render(report)
-                : new TextReporter(useColor()).render(report);
+        String output = switch (format) {
+            case JSON -> new JsonReporter().render(report);
+            case GITHUB -> new GithubReporter(failOn::fails).render(report);
+            case TEXT -> new TextReporter(useColor()).render(report);
+        };
 
         PrintWriter out = commandSpec.commandLine().getOut();
         out.println(output);
         out.flush();
 
         return shown.stream().anyMatch(failOn::fails) ? 1 : 0;
+    }
+
+    /** Normalizes a prefix: forward slashes, no leading "./", no trailing slash. */
+    static String normalizePrefix(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String prefix = raw.replace('\\', '/');
+        while (prefix.startsWith("./")) {
+            prefix = prefix.substring(2);
+        }
+        while (prefix.endsWith("/")) {
+            prefix = prefix.substring(0, prefix.length() - 1);
+        }
+        return prefix;
     }
 
     private boolean useColor() {
