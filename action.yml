@@ -1,0 +1,69 @@
+name: rift
+description: Fails the build when the frontend calls API endpoints the backend does not declare.
+author: Thomas Batista Pinto
+
+inputs:
+  frontend:
+    description: Directory with the frontend TypeScript code.
+    required: true
+  spec:
+    description: Backend API spec (Swagger 2.0 or OpenAPI 3, JSON or YAML), as a file path or URL.
+    required: true
+  base-url:
+    description: |
+      Expression that holds the server address in the frontend code, such as this.getBaseURL().
+      One per line.
+    required: false
+    default: ""
+  min-confidence:
+    description: Hide findings below this confidence (0 to 1).
+    required: false
+    default: "0.8"
+  fail-on:
+    description: "What makes the step fail: missing, all or never."
+    required: false
+    default: missing
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: "21"
+
+    - uses: actions/setup-node@v6
+      with:
+        node-version: "22"
+
+    - name: Build rift
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        mvn -B -q -f core/pom.xml package -DskipTests
+        npm --prefix extractor-ts ci --silent
+        npm --prefix extractor-ts run build --silent
+
+    - name: Run rift
+      shell: bash
+      env:
+        RIFT_ROOT: ${{ github.action_path }}
+        FRONTEND: ${{ inputs.frontend }}
+        SPEC: ${{ inputs.spec }}
+        BASE_URLS: ${{ inputs.base-url }}
+        MIN_CONFIDENCE: ${{ inputs.min-confidence }}
+        FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        args=()
+        while IFS= read -r expression; do
+          if [ -n "$expression" ]; then
+            args+=(--base-url "$expression")
+          fi
+        done <<< "$BASE_URLS"
+
+        node "$RIFT_ROOT/scripts/rift-scan.mjs" \
+          --frontend "$FRONTEND" \
+          --spec "$SPEC" \
+          --min-confidence "$MIN_CONFIDENCE" \
+          --fail-on "$FAIL_ON" \
+          "${args[@]}"

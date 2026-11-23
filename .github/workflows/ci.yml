@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, test and scan the demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: extractor-ts/package-lock.json
+
+      - name: Build and test the core
+        run: mvn -B -f core/pom.xml verify
+
+      - name: Build the extractor
+        run: |
+          npm --prefix extractor-ts ci
+          npm --prefix extractor-ts run build
+
+      - name: rift finds the drift planted in examples/drift-demo
+        run: |
+          set +e
+          node scripts/rift-scan.mjs \
+            --frontend examples/drift-demo/frontend \
+            --spec examples/drift-demo/openapi.json \
+            --no-color | tee report.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          test "$code" -eq 1
+          grep -q "MISSING_ENDPOINT (2)" report.txt
+          grep -q "/api/users/profile" report.txt
+          grep -q "only for GET, PATCH, not for PUT" report.txt
+
+  action:
+    name: The GitHub Action works
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the action on the demo (fail-on never, so this job passes)
+        uses: ./
+        with:
+          frontend: examples/drift-demo/frontend
+          spec: examples/drift-demo/openapi.json
+          fail-on: never
