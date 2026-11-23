@@ -1,0 +1,23 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Drift demo API", "version": "1.0.0" },
+  "paths": {
+    "/api/projects": {
+      "get": { "responses": { "200": { "description": "List projects" } } },
+      "post": { "responses": { "201": { "description": "Create a project" } } }
+    },
+    "/api/projects/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": { "responses": { "200": { "description": "Get a project" } } },
+      "patch": { "responses": { "200": { "description": "Rename a project" } } }
+    },
+    "/api/users/me": {
+      "get": { "responses": { "200": { "description": "The signed in user" } } }
+    },
+    "/api/health": {
+      "get": { "responses": { "200": { "description": "Health check" } } }
+    }
+  }
+}
