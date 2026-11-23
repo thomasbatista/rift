@@ -109,6 +109,20 @@ class DiffEngineTest {
     }
 
     @Test
+    void aLooseCandidateWithAnotherMethodIsNotReportedAsAMethodMismatch() {
+        List<Endpoint> endpoints = List.of(
+                new Endpoint("GET", "/api/x/{teamID}/channels/{channelID}"),
+                new Endpoint("GET", "/api/x/{teamID}/boards/{id}"));
+
+        List<Finding> findings = DiffEngine.analyze(endpoints,
+                graph(call("POST", "/api/x/{t}/{root}/files", UrlKind.TEMPLATE, "a.ts", 1, 0.8)));
+
+        List<Finding> missing = only(findings, Rule.MISSING_ENDPOINT);
+        assertEquals(1, missing.size());
+        assertEquals("The backend does not declare POST /api/x/{t}/{root}/files", missing.get(0).message());
+    }
+
+    @Test
     void findingsAreOrderedByRuleThenFileThenLine() {
         List<Finding> findings = DiffEngine.analyze(ENDPOINTS, graph(
                 call("GET", "/api/zzz", UrlKind.LITERAL, "b.ts", 4, 1.0),

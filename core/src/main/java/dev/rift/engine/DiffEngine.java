@@ -62,7 +62,12 @@ public final class DiffEngine {
     }
 
     private static Finding missing(ConsumedCall call, List<Endpoint> endpoints) {
+        // Only a strict match is "the same path": a loose one is a different endpoint that merely
+        // could accept this URL, so claiming it exists "for other methods" would be misleading.
         List<String> otherMethods = PathMatcher.bestMatches(call.url(), endpoints).stream()
+                .filter(endpoint -> PathMatcher.match(call.url(), endpoint.pathTemplate())
+                        .map(PathMatcher.Match::strict)
+                        .orElse(false))
                 .map(Endpoint::method)
                 .distinct()
                 .sorted()
