@@ -36,7 +36,7 @@ Any language can be supported by writing an extractor that emits this format.
 
 | Field | Type | Description |
 |---|---|---|
-| `method` | string | HTTP method, uppercase (`GET`, `POST`...). |
+| `method` | string | HTTP method, uppercase (`GET`, `POST`...). `UNKNOWN` when the extractor could not read it; such calls are always `dynamic`. |
 | `url` | string or null | Path template, with `{name}` for dynamic segments. `null` when it could not be resolved. |
 | `urlKind` | string | `literal`, `template` or `dynamic`. |
 | `file` | string | Path of the source file, relative to the scanned directory. |
@@ -77,3 +77,6 @@ Unknown parts are written as `{name}` in `url`. Backends and frontends often nam
 - `encodeURIComponent(x)`, `encodeURI(x)` and `String(x)` only convert a value, so they resolve to the value itself.
 - `value || "0"` and `value ?? "0"` count as a single path segment.
 - A `let` that only ever holds a query string may be reassigned freely. A `let` that starts as a path may not.
+- Constants imported from other files, and `fetch`, `window.fetch`, `globalThis.fetch` and `self.fetch`.
+- The HTTP method is read only from a plain `method: "POST"` (no `method` means GET). A spread, a `{ method }` shorthand, a variable, or an options object built elsewhere may hide it, so the call is reported as `dynamic` with method `UNKNOWN` instead of being guessed.
+- A URL must start with fixed text. One that starts with something unknown could be any path, so it is reported as `dynamic`.

@@ -30,8 +30,10 @@ interface ConsumptionGraph {
 // Glob patterns need forward slashes, even on Windows.
 const toPosix = (path: string): string => path.split(sep).join("/");
 
+const FETCH_NAMES = new Set(["fetch", "window.fetch", "globalThis.fetch", "self.fetch"]);
+
 function isFetchCall(call: CallExpression): boolean {
-  return call.getExpression().getText() === "fetch";
+  return FETCH_NAMES.has(call.getExpression().getText());
 }
 
 interface ResolvedUrl {
@@ -167,7 +169,9 @@ function toParts(node: Node, depth: number): Part[] {
 
   if (Node.isIdentifier(node)) {
     // A local variable holding a URL: follow it to its initializer.
-    const declaration = node.getSymbol()?.getValueDeclaration();
+    let symbol = node.getSymbol();
+    if (symbol?.isAlias()) symbol = symbol.getAliasedSymbol() ?? symbol; // imported from another file
+    const declaration = symbol?.getValueDeclaration();
     if (declaration && Node.isVariableDeclaration(declaration)) {
       const initializer = declaration.getInitializer();
       const kind = declaration.getVariableStatement()?.getDeclarationKind();
@@ -192,9 +196,10 @@ function resolveUrl(arg: Node | undefined): ResolvedUrl {
 
   const parts = stripQuery(toParts(arg, 0));
 
-  // Without any fixed text there is nothing to match against the backend.
-  const hasText = parts.some((part) => part.kind === "text" && part.value.length > 0);
-  if (!hasText) return DYNAMIC;
+  // A URL that starts with something unknown (a variable we cannot follow) could be any path at all,
+  // and one without any fixed text has nothing to match against the backend.
+  const first = parts.find((part) => !(part.kind === "text" && part.value === ""));
+  if (!first || first.kind === "param") return DYNAMIC;
 
   const url = parts.map((part) => (part.kind === "text" ? part.value : `{${part.name}}`)).join("");
   const params = parts.filter((part) => part.kind === "param");
@@ -202,18 +207,34 @@ function resolveUrl(arg: Node | undefined): ResolvedUrl {
   return { url, kind: "template", confidence };
 }
 
-function methodOf(call: CallExpression): string {
+// null means "there is an options argument we cannot fully read, so the method may be hidden in it".
+function methodOf(call: CallExpression): string | null {
   const options = call.getArguments()[1];
-  if (options && Node.isObjectLiteralExpression(options)) {
-    const property = options.getProperty("method");
-    if (property && Node.isPropertyAssignment(property)) {
+  if (!options) return "GET";
+  if (!Node.isObjectLiteralExpression(options)) return null;
+
+  let method = "GET";
+  for (const property of options.getProperties()) {
+    if (Node.isSpreadAssignment(property)) return null;
+
+    if (Node.isShorthandPropertyAssignment(property)) {
+      if (property.getName() === "method") return null;
+      continue;
+    }
+
+    if (Node.isPropertyAssignment(property)) {
+      const nameNode = property.getNameNode();
+      if (Node.isComputedPropertyName(nameNode)) return null;
+
+      const name = nameNode.getText().replace(/^["']|["']$/g, "");
+      if (name !== "method") continue;
+
       const value = property.getInitializer();
-      if (value && Node.isStringLiteral(value)) {
-        return value.getLiteralText().toUpperCase();
-      }
+      if (!value || !Node.isStringLiteral(value)) return null;
+      method = value.getLiteralText().toUpperCase();
     }
   }
-  return "GET";
+  return method;
 }
 
 function extract(directory: string): ConsumptionGraph {
@@ -232,9 +253,10 @@ function extract(directory: string): ConsumptionGraph {
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       if (!isFetchCall(call)) continue;
 
-      const { url, kind, confidence } = resolveUrl(call.getArguments()[0]);
+      const method = methodOf(call);
+      const { url, kind, confidence } = method === null ? DYNAMIC : resolveUrl(call.getArguments()[0]);
       calls.push({
-        method: methodOf(call),
+        method: method ?? "UNKNOWN",
         url,
         urlKind: kind,
         file: toPosix(relative(root, sourceFile.getFilePath())),
