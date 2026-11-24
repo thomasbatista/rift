@@ -4,6 +4,8 @@
 
 **Catches contract drift between a backend API spec and the frontend code that really calls it.**
 
+![rift catching two planted drifts](docs/demo.gif)
+
 Rename a field or an endpoint on the backend and everything still compiles, every test still passes, and the frontend breaks in production. rift reads your frontend code, compares the HTTP calls it finds with your OpenAPI/Swagger spec, and fails the pull request when they disagree.
 
 It is static analysis only: rift reads source files and a spec. It never calls your server and never touches a database.
